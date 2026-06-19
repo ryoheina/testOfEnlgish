@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { verifyPassword, createToken } from "@/lib/auth";
 import { ensureDatabaseReady } from "@/lib/db-bootstrap";
+import { handleApiError } from "@/lib/api-error";
 import { rateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/utils";
 
@@ -20,13 +21,21 @@ export async function POST(request: NextRequest) {
   try {
     await ensureDatabaseReady();
 
-    const body = await request.json();
-    const parsed = loginSchema.safeParse(body);
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
 
+    const parsed = loginSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid credentials", details: parsed.error.flatten() },
-        { status: 400 }
+        { error: "Invalid username or password" },
+        { status: 401 }
       );
     }
 
@@ -34,12 +43,18 @@ export async function POST(request: NextRequest) {
 
     const admin = await prisma.admin.findUnique({ where: { username } });
     if (!admin) {
-      return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Invalid username or password" },
+        { status: 401 }
+      );
     }
 
     const valid = await verifyPassword(password, admin.passwordHash);
     if (!valid) {
-      return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Invalid username or password" },
+        { status: 401 }
+      );
     }
 
     const token = await createToken({
@@ -63,7 +78,6 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("Login error:", error);
-    return NextResponse.json({ error: "Login failed" }, { status: 500 });
+    return handleApiError("admin/auth/login", error);
   }
 }

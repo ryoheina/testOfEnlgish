@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { ensureDatabaseReady } from "@/lib/db-bootstrap";
+import { handleApiError } from "@/lib/api-error";
 import { rateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/utils";
 import { generateCsrfToken } from "@/lib/csrf";
@@ -20,12 +21,18 @@ export async function POST(request: NextRequest) {
   try {
     await ensureDatabaseReady();
 
-    const body = await request.json();
+    let body: { fullName?: string; studentId?: string };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const { fullName, studentId } = body;
 
-    if (!fullName) {
+    if (!fullName || fullName.trim().length < 2) {
       return NextResponse.json(
-        { error: "Full name is required" },
+        { error: "Full name is required (minimum 2 characters)" },
         { status: 400 }
       );
     }
@@ -34,10 +41,19 @@ export async function POST(request: NextRequest) {
     if (!config) {
       config = await prisma.testConfig.create({
         data: {
-          questionCount: parseInt(process.env.NEXT_PUBLIC_DEFAULT_QUESTION_COUNT || "20", 10),
-          passPercentage: parseInt(process.env.NEXT_PUBLIC_PASS_PERCENTAGE || "60", 10),
+          questionCount: parseInt(
+            process.env.NEXT_PUBLIC_DEFAULT_QUESTION_COUNT || "20",
+            10
+          ),
+          passPercentage: parseInt(
+            process.env.NEXT_PUBLIC_PASS_PERCENTAGE || "60",
+            10
+          ),
           timerEnabled: process.env.NEXT_PUBLIC_ENABLE_TIMER !== "false",
-          timerMinutes: parseInt(process.env.NEXT_PUBLIC_TIMER_MINUTES || "30", 10),
+          timerMinutes: parseInt(
+            process.env.NEXT_PUBLIC_TIMER_MINUTES || "30",
+            10
+          ),
           randomizeQuestions: true,
           randomizeAnswers: true,
         },
@@ -61,7 +77,8 @@ export async function POST(request: NextRequest) {
     if (activeQuestions.length < config.questionCount) {
       return NextResponse.json(
         {
-          error: `Not enough questions available. Need ${config.questionCount}, have ${activeQuestions.length}`,
+          error: `Not enough questions available. Need ${config.questionCount}, have ${activeQuestions.length}. Ask an administrator to import questions.`,
+          code: "INSUFFICIENT_QUESTIONS",
         },
         { status: 400 }
       );
@@ -81,13 +98,15 @@ export async function POST(request: NextRequest) {
 
     const sessionId = randomUUID();
     const csrfToken = generateCsrfToken();
-    const expiresAt = new Date(Date.now() + config.timerMinutes * 60 * 1000 + 600000);
+    const expiresAt = new Date(
+      Date.now() + config.timerMinutes * 60 * 1000 + 600000
+    );
 
     await prisma.testProgress.create({
       data: {
         sessionId,
         csrfToken,
-        studentData: { fullName, studentId: studentId || null },
+        studentData: { fullName: fullName.trim(), studentId: studentId || null },
         questionIds: selectedQuestions.map((q) => q.id),
         answers: {},
         currentIndex: 0,
@@ -104,7 +123,7 @@ export async function POST(request: NextRequest) {
       ];
 
       let shuffledOptions = options;
-      if (config!.randomizeAnswers) {
+      if (config.randomizeAnswers) {
         shuffledOptions = [...options];
         for (let i = shuffledOptions.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
@@ -136,7 +155,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Test start error:", error);
-    return NextResponse.json({ error: "Failed to start test" }, { status: 500 });
+    return handleApiError("test/start", error);
   }
 }

@@ -1,5 +1,5 @@
-import { execSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
+import { execSync } from "node:child_process";
 
 function runSafe(command) {
   console.log(`> ${command}`);
@@ -23,46 +23,19 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("Syncing database schema...");
+  console.log("Running database migrations...");
   const migrated = runSafe("npx prisma migrate deploy");
   if (!migrated) {
     runSafe("npx prisma db push --accept-data-loss");
   }
 
-  const prisma = new PrismaClient();
+  console.log("Seeding database if needed...");
+  runSafe("npx tsx prisma/seed.ts");
 
-  try {
-    let questionCount = 0;
-    let adminCount = 0;
-
-    try {
-      questionCount = await prisma.question.count();
-      adminCount = await prisma.admin.count();
-    } catch {
-      console.log("Tables not ready yet, will seed...");
-    }
-
-    if (
-      questionCount === 0 ||
-      adminCount === 0 ||
-      process.env.RUN_SEED === "true"
-    ) {
-      console.log("Seeding database...");
-      runSafe("npx tsx prisma/seed.ts");
-    } else {
-      console.log(
-        `Database ready (${questionCount} questions, ${adminCount} admin).`
-      );
-    }
-  } finally {
-    await prisma.$disconnect();
-  }
-
-  console.log("Database setup complete.");
+  console.log("Release phase complete.");
 }
 
 main().catch((error) => {
-  console.error("Database setup error:", error);
-  // Do not crash deploy — runtime bootstrap will retry
-  process.exit(0);
+  console.error("Release setup failed:", error);
+  process.exit(1);
 });
