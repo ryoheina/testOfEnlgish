@@ -9,6 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/start.mjs",
+    "release": "node scripts/release.mjs",
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",

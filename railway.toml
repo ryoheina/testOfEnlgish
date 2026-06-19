@@ -3,8 +3,7 @@ builder = "nixpacks"
 buildCommand = "npm ci --include=dev && npx prisma generate && npm run build"
 
 [deploy]
+releaseCommand = "node scripts/release.mjs"
 startCommand = "node scripts/start.mjs"
-healthcheckPath = "/api/health"
-healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5

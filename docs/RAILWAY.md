@@ -1,13 +1,12 @@
 # Railway Deployment — READ THIS
 
-## Why it crashed (common causes)
+### Why healthcheck failed
 
-1. **No PostgreSQL database** — `DATABASE_URL` was missing
-2. **Build failed** — Tailwind/TypeScript not installed during build
-3. **Server not reachable** — app didn't bind to `0.0.0.0`
-4. **Conflicting config files** — fixed in latest code
+The old start script ran **database migrations before starting the web server**. Railway's healthcheck timed out (~90s) waiting for a response because `next start` never ran in time.
 
-## Deploy checklist (do ALL steps)
+**Fixed:** migrations run in `release` phase; `start` only launches the server immediately.
+
+### Deploy checklist (do ALL steps)
 
 ### 1. Push latest code to GitHub
 Make sure Railway deploys the newest commit (not just "first commit").
