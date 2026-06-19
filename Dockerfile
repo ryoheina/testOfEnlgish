@@ -22,4 +22,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV UPLOAD_DIR="/app/data/uploads"
-CMD ["sh", "-c", "node scripts/release.mjs && node scripts/start.mjs"]
+CMD ["node", "scripts/start.mjs"]
