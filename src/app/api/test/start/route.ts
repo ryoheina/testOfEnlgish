@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { ensureDatabaseReady } from "@/lib/db-bootstrap";
 import { rateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/utils";
 import { generateCsrfToken } from "@/lib/csrf";
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await ensureDatabaseReady();
+
     const body = await request.json();
     const { fullName, studentId } = body;
 

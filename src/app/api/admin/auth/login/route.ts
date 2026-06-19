@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { loginSchema } from "@/lib/validations";
 import { verifyPassword, createToken } from "@/lib/auth";
+import { ensureDatabaseReady } from "@/lib/db-bootstrap";
 import { rateLimit, getRateLimitHeaders } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/utils";
 
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await ensureDatabaseReady();
+
     const body = await request.json();
     const parsed = loginSchema.safeParse(body);
 
