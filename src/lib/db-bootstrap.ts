@@ -1,5 +1,5 @@
 import prisma from "./prisma";
-import { applyInitialSchema, schemaIsReady } from "./migrate-schema";
+import { applySchemaSync, schemaIsReady } from "./migrate-schema";
 import { seedDatabase } from "./seed-data";
 import { ApiError } from "./api-error";
 
@@ -19,8 +19,17 @@ async function bootstrap(): Promise<void> {
 
   const hasSchema = await schemaIsReady(prisma);
   if (!hasSchema) {
-    console.log("[db] Schema missing, applying migration SQL...");
-    await applyInitialSchema(prisma);
+    console.log("[db] Schema out of sync, applying migrations...");
+    await applySchemaSync(prisma);
+
+    const synced = await schemaIsReady(prisma);
+    if (!synced) {
+      throw new ApiError(
+        503,
+        "Database schema sync failed. Run: npx prisma migrate deploy",
+        "SCHEMA_SYNC_FAILED"
+      );
+    }
   }
 
   const [questionCount, adminCount] = await Promise.all([

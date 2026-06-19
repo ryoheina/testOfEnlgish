@@ -1,41 +1,33 @@
-import { PrismaClient } from "@prisma/client";
 import { execSync } from "node:child_process";
 
-function runSafe(command) {
+function run(command) {
   console.log(`> ${command}`);
-  try {
-    execSync(command, { stdio: "inherit", env: process.env });
-    return true;
-  } catch (error) {
-    console.error(`[warn] command failed: ${command}`);
-    if (error instanceof Error) console.error(error.message);
-    return false;
-  }
+  execSync(command, { stdio: "inherit", env: process.env });
 }
 
-async function main() {
-  if (!process.env.DATABASE_URL) {
-    console.error(
-      "\n[FATAL] DATABASE_URL is not set.\n" +
-        "Railway: + New → Database → PostgreSQL\n" +
-        "Then: App → Variables → Reference → DATABASE_URL\n"
-    );
-    process.exit(1);
-  }
-
-  console.log("Running database migrations...");
-  const migrated = runSafe("npx prisma migrate deploy");
-  if (!migrated) {
-    runSafe("npx prisma db push --accept-data-loss");
-  }
-
-  console.log("Seeding database if needed...");
-  runSafe("npx tsx prisma/seed.ts");
-
-  console.log("Release phase complete.");
-}
-
-main().catch((error) => {
-  console.error("Release setup failed:", error);
+if (!process.env.DATABASE_URL) {
+  console.error(
+    "\n[FATAL] DATABASE_URL is not set.\n" +
+      "Railway: + New → Database → PostgreSQL\n" +
+      "Then: App → Variables → Reference → DATABASE_URL\n"
+  );
   process.exit(1);
-});
+}
+
+console.log("Running Prisma migrations...");
+try {
+  run("npx prisma migrate deploy");
+} catch (error) {
+  console.error("migrate deploy failed:", error);
+  console.log("Falling back to db push...");
+  run("npx prisma db push --accept-data-loss");
+}
+
+console.log("Seeding database if needed...");
+try {
+  run("npx tsx prisma/seed.ts");
+} catch (error) {
+  console.error("Seed failed (non-fatal if data exists):", error);
+}
+
+console.log("Release phase complete.");
