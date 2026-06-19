@@ -1,136 +1,74 @@
-# Railway Deployment Guide
+# Railway Deployment — READ THIS
 
-Deploy the English Test Platform to [Railway](https://railway.com) in a few minutes.
+## Why it crashed (common causes)
 
-## Prerequisites
+1. **No PostgreSQL database** — `DATABASE_URL` was missing
+2. **Build failed** — Tailwind/TypeScript not installed during build
+3. **Server not reachable** — app didn't bind to `0.0.0.0`
+4. **Conflicting config files** — fixed in latest code
 
-- A [Railway](https://railway.com) account
-- This project pushed to GitHub (or deploy via Railway CLI)
+## Deploy checklist (do ALL steps)
 
-## Step 1: Create a New Project
+### 1. Push latest code to GitHub
+Make sure Railway deploys the newest commit (not just "first commit").
 
-1. Go to [railway.com/new](https://railway.com/new)
-2. Choose **Deploy from GitHub repo** and select this repository
-3. Railway will auto-detect Next.js via `railway.toml`
+### 2. Add PostgreSQL (REQUIRED)
+```
+Railway project → + New → Database → PostgreSQL
+```
+Then open your **app service** → Variables → confirm `DATABASE_URL` exists (Railway adds it when you reference the database).
 
-## Step 2: Add PostgreSQL
+To link database to app:
+```
+App service → Variables → + New Variable → Add Reference → DATABASE_URL
+```
 
-1. In your Railway project, click **+ New**
-2. Select **Database → PostgreSQL**
-3. Railway automatically creates `DATABASE_URL` and links it to your app
+### 3. Set these variables on the APP service
 
-> **Important:** The app requires PostgreSQL. SQLite does not work on Railway.
+| Variable | Value |
+|----------|-------|
+| `JWT_SECRET` | any random 32+ character string |
+| `CSRF_SECRET` | any random 32+ character string |
+| `ADMIN_USERNAME` | `admin` |
+| `ADMIN_PASSWORD` | your password |
+| `RUN_SEED` | `true` (first deploy only) |
+| `NODE_ENV` | `production` |
 
-## Step 3: Set Environment Variables
-
-In your app service → **Variables**, add:
-
-| Variable | Value | Required |
-|----------|-------|----------|
-| `JWT_SECRET` | Random 32+ char string | Yes |
-| `CSRF_SECRET` | Random 32+ char string | Yes |
-| `ADMIN_USERNAME` | `admin` | Yes |
-| `ADMIN_PASSWORD` | Your secure password | Yes |
-| `RUN_SEED` | `true` (first deploy only) | First deploy |
-| `NODE_ENV` | `production` | Yes |
-| `UPLOAD_DIR` | `/app/data/uploads` | If using volume |
-
-Generate secrets:
-```bash
+Generate a secret:
+```
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-`DATABASE_URL` is set automatically when you add PostgreSQL.
+### 4. Redeploy
+Click **Redeploy** on the app service (or push a new commit).
 
-## Step 4: First Deploy
+### 5. Expose the site
+```
+App service → Settings → Networking → Generate Domain
+```
 
-1. Push your code — Railway builds automatically
-2. Build runs: `prisma generate && next build`
-3. Release runs: `prisma migrate deploy` (creates tables)
-4. Start runs: database setup + `next start`
+### 6. After first successful deploy
+Set `RUN_SEED` back to `false` and redeploy.
 
-## Step 5: Seed Database (First Time)
+## Verify it works
 
-After the first successful deploy, run once in Railway shell:
+Visit: `https://your-domain.up.railway.app/api/health`
+
+Should return: `{"ok":true,"status":"healthy"}`
+
+## Still crashing?
+
+Open **Deployments → View Logs** and check for:
+
+| Log message | Fix |
+|-------------|-----|
+| `DATABASE_URL is not set` | Add PostgreSQL database |
+| `Can't reach database` | Link DATABASE_URL to app service |
+| `JWT_SECRET` errors | Add JWT_SECRET variable |
+| Build errors about tailwind | Push latest code (this is fixed) |
+
+## Manual seed (if needed)
 
 ```bash
 railway run npm run db:seed
 ```
-
-Or set `RUN_SEED=true` before the first deploy, then set it back to `false`.
-
-This creates:
-- Admin account
-- 25 sample questions
-- Default test configuration
-
-## Step 6: Generate Public URL
-
-1. Open your app service → **Settings → Networking**
-2. Click **Generate Domain**
-3. Your site is live at `https://your-app.up.railway.app`
-
-## Optional: Persistent File Uploads
-
-Uploaded files are lost on redeploy unless you add a volume:
-
-1. App service → **Settings → Volumes**
-2. Mount path: `/app/data/uploads`
-3. Set variable: `UPLOAD_DIR=/app/data/uploads`
-
-## Environment Variables Reference
-
-```env
-DATABASE_URL=          # Auto-set by Railway PostgreSQL
-JWT_SECRET=            # Required — random secret
-CSRF_SECRET=           # Required — random secret
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=        # Your password
-RUN_SEED=false         # true on first deploy only
-NODE_ENV=production
-UPLOAD_DIR=/app/data/uploads
-PORT=                  # Auto-set by Railway
-```
-
-## Local Development with PostgreSQL
-
-Use Docker for a local database matching production:
-
-```bash
-docker compose up -d db
-```
-
-Then set in `.env`:
-```env
-DATABASE_URL="postgresql://postgres:password@localhost:5432/english_test?schema=public"
-```
-
-```bash
-npm run db:setup
-npm run db:seed
-npm run dev
-```
-
-## Troubleshooting
-
-### Build fails on Prisma
-Ensure `DATABASE_URL` is set before build. Railway links PostgreSQL before building.
-
-### 500 errors after deploy
-Check deploy logs. Run migrations manually:
-```bash
-railway run npx prisma migrate deploy
-```
-
-### Admin login fails
-Re-seed the admin account:
-```bash
-railway run npm run db:seed
-```
-
-### Files disappear after redeploy
-Add a Railway volume at `/app/data/uploads` and set `UPLOAD_DIR`.
-
-## Cost Estimate
-
-Railway Hobby plan (~$5/month) covers a small-to-medium test platform with PostgreSQL included.
